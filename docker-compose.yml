@@ -1,48 +1,53 @@
 version: "2"
 services:
-  varnish:
-    image: meanbee/magento2-varnish:latest
-    environment:
-      - VIRTUAL_HOST=magento2.docker
-      - VIRTUAL_PORT=80
-      - HTTPS_METHOD=noredirect
-    ports:
-      - 80
-    links:
-      - web
+  # varnish:
+  #   image: meanbee/magento2-varnish:latest
+  #   environment:
+  #     - VIRTUAL_HOST=dev2.magento2.docker
+  #     - VIRTUAL_PORT=80
+  #     - HTTPS_METHOD=noredirect
+  #   ports:
+  #     - 80:80
+  #   links:
+  #     - web
 
   web:
     image: meanbee/magento2-nginx:1.9
     ports:
-      - 80
+      - 80:80
     links:
       - fpm
       - db
+      # - elasticsearch
     volumes_from:
       - appdata
     env_file:
       - ./global.env
-    #environment:
-      #- VIRTUAL_HOST=magento2.docker
-      #- VIRTUAL_PORT=80
-      #- HTTPS_METHOD=noredirect
+    environment:
+      - VIRTUAL_HOST=dev2.magento2.docker
+      - VIRTUAL_PORT=80
+      - HTTPS_METHOD=noredirect
 
   fpm:
     hostname: fpm.magento2.docker
-    image: meanbee/magento2-php:7.0-fpm
+    image: meanbee/magento2-php:7.3-fpm
     ports:
       - 9000
     links:
       - db
+      # - elasticsearch
     volumes_from:
       - appdata
     env_file:
       - ./global.env
 
   db:
-    image: mariadb:10
+    image: mariadb:10.2
+    container_name: magento_mysql
     ports:
       - 3306
+    volumes: 
+      - "./magento-db.sql:/docker-entrypoint-initdb.d/dump.sql"    
     volumes_from:
       - dbdata
     environment:
@@ -54,11 +59,23 @@ services:
 
   cli:
     hostname: cli.magento2.docker
-    image: meanbee/magento2-php:7.0-cli
+    image: meanbee/magento2-php:7.3-cli
     links:
       - db
+      # - elasticsearch
+    depends_on:
+      - db
+      # - elasticsearch
     volumes:
-      - ~/.composer/cache:/root/.composer/cache
+      # - ~/.composer/cache:/root/.composer/cache
+      - ./7.3-cli/bin/magento-installer:/usr/local/bin/magento-installer
+      # - ./7.3-cli/bin/magento-command:/usr/local/bin/magento-command
+      # - ./7.3-cli/bin/magento-extension-installer:/usr/local/bin/magento-extension-installer
+      # - ./7.3-cli/bin/mageconfigsync:/usr/local/bin/mageconfigsync
+      # - ./7.3-cli/bin/magedbm2:/usr/local/bin/magedbm2
+      # - ./7.3-cli/bin/run-cron:/usr/local/bin/run-cron
+      # - ./7.3-cli/bin/magerun2:/usr/local/bin/magenrun2
+      # - ./7.3-cli/etc/mail.ini:/etc/mail.ini
     volumes_from:
       - appdata
     env_file:
@@ -70,19 +87,19 @@ services:
       - M2SETUP_DB_NAME=magento2
       - M2SETUP_DB_USER=magento2
       - M2SETUP_DB_PASSWORD=magento2
-      - M2SETUP_BASE_URL=http://magento2.docker/
-      # - M2SETUP_SECURE_BASE_URL=https://magento2.docker/
+      - M2SETUP_BASE_URL=http://dev2.magento2.docker/
+      # - M2SETUP_SECURE_BASE_URL=http://dev2.magento2.docker/
       - M2SETUP_BACKEND_FRONTNAME=admin
       - M2SETUP_ADMIN_FIRSTNAME=Admin
       - M2SETUP_ADMIN_LASTNAME=User
       - M2SETUP_ADMIN_EMAIL=dummy@gmail.com
       - M2SETUP_ADMIN_USER=admin
       - M2SETUP_ADMIN_PASSWORD=password1
-      - M2SETUP_VERSION=2.1.*
-      # - M2SETUP_USE_SAMPLE_DATA=true
+      - M2SETUP_VERSION=2.3.5
+      - M2SETUP_USE_SAMPLE_DATA=false
 
   cron:
-    image: meanbee/magento2-php:7.0-cli
+    image: meanbee/magento2-php:7.3-cli
     hostname: magento2-cron.docker
     command: run-cron
     env_file:
@@ -94,12 +111,33 @@ services:
     links:
       - db
 
+  myadmin:
+    image: phpmyadmin/phpmyadmin
+    ports:
+      - 8000:80
+    restart: always
+    links:
+      - db
+    depends_on:
+      - db
+
+  # elasticsearch:
+  #   container_name: elasticsearch
+  #   image: docker.elastic.co/elasticsearch/elasticsearch:7.5.2
+  #   ports:
+  #     - 9200:9200
+  #     - 9300:9300
+  #   environment:
+  #     - discovery.type=single-node
+  #   restart: always
+
   appdata:
     image: tianon/true
     volumes:
-      - ./magento:/var/www/magento
+      - ../magento2:/var/www/magento
+      - ../magento2-sample-data:/var/www/magento2-sample-data
 
   dbdata:
     image: tianon/true
     volumes:
-      - /var/lib/mysql
+      - ./mysql/data:/var/lib/mysql
